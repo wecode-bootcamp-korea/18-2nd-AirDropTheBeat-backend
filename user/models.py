@@ -1,14 +1,15 @@
 from django.db import models
 
 class User(models.Model):
-    first_name    = models.CharField(max_length=30)
-    last_name     = models.CharField(max_length=20)
-    date_of_birth = models.CharField(max_length=45)
-    email         = models.EmailField(max_length=100)
-    password      = models.CharField(max_length=300)
-    phone_number  = models.CharField(max_length=20)
-    image_url     = models.URLField(max_length=3000)
-    
+    first_name    = models.CharField(max_length=30, null=True)
+    last_name     = models.CharField(max_length=20, null=True)
+    date_of_birth = models.CharField(max_length=45, null=True)
+    email         = models.EmailField(max_length=100, null=True, unique=True)
+    password      = models.CharField(max_length=300, null=True)
+    phone_number  = models.CharField(max_length=20, null=True)
+    image_url     = models.URLField(max_length=3000, null=True)
+    kakao_id      = models.BigIntegerField(null=True, unique=True)
+
     class Meta:
         db_table = "users"
 
