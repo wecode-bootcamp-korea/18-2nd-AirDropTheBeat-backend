@@ -1,7 +1,7 @@
 from django.db import models
 
 class BookStatus(models.Model):
-    name          = models.CharField(max_length=45, null=True)
+    name          = models.CharField(max_length=30)
     
     class Meta:
         db_table = "book_status"
