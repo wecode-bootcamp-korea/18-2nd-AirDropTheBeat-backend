@@ -166,6 +166,8 @@ class RoomListViewTest(TestCase):
         address_line = AddressLine.objects.create(id=1,city=city,district=district, name="역삼동")
         checkin      = CheckinType.objects.create(id=1,name="셀프체크인", description="셀프체크인으로 편하게 이용하세요.")
         type         = Type.objects.create(id=1,name="집 전체", description="집 전체를 제공합니다.")
+        type2        = Type.objects.create(id=2,name="개인실", description="개인실을 제공합니다.")
+        type3        = Type.objects.create(id=3,name="호텔 객실", description="호텔 객실을 제공합니다.")
         user         = User.objects.create(id=1,first_name="sehyeong")
         host         = Host.objects.create(id=1,user=user,residence="서울시 강남구", language="한국어, 영어", available_hour="12:00~18:00")
         book_status  = BookStatus.objects.create(id=1,name="예약완료")
@@ -254,6 +256,51 @@ class RoomListViewTest(TestCase):
                                     bathroom       = 1,
                                     bed            = 1
                                     )
+        
+        room5 = Room.objects.create(
+                                    id             = 5,
+                                    title          = "집5",
+                                    type           = type2,
+                                    host           = host,
+                                    checkin        = checkin,
+                                    city           = city,
+                                    district       = district,
+                                    address_line   = address_line,
+                                    zip_code       = "42432",
+                                    price          = 53000,
+                                    discount_rate  = 0,
+                                    latitude       = 36.653463,
+                                    longitude      = 126.5636,
+                                    maximum_people = 4,
+                                    checkin_time   = "15:00:00",
+                                    checkout_time  = "12:00:00",
+                                    bedroom        = 2,
+                                    bathroom       = 1,
+                                    bed            = 1
+                                    )
+        
+        room6 = Room.objects.create(
+                                    id             = 6,
+                                    title          = "집6",
+                                    type           = type3,
+                                    host           = host,
+                                    checkin        = checkin,
+                                    city           = city,
+                                    district       = district,
+                                    address_line   = address_line,
+                                    zip_code       = "42432",
+                                    price          = 120000,
+                                    discount_rate  = 0,
+                                    latitude       = 36.653463,
+                                    longitude      = 126.5636,
+                                    maximum_people = 3,
+                                    checkin_time   = "15:00:00",
+                                    checkout_time  = "12:00:00",
+                                    bedroom        = 2,
+                                    bathroom       = 1,
+                                    bed            = 1
+                                    )
+
 
         Book.objects.create(
                             id               = 1,
@@ -318,5 +365,9 @@ class RoomListViewTest(TestCase):
 
     def test_filtering_rooms_success(self):
         response = client.get('/room/list?city_id=1&district=강남구&checkin=2021-04-15&checkout=2021-04-18&adults=2', content_type='application/json')
-        self.assertEqual(len(response.json()['room_list']), 2)
+        self.assertEqual(len(response.json()['room_list']), 4)
+        self.assertEqual(response.status_code, 200)
+
+    def test_filtering_rooms_success_with_additional_filter(self):
+        response = client.get('/room/list?district=강남구&checkin=2021-04-16&checkout=2021-04-18&typelist=2&typelist=3&min=80000', content_type='application/json')
         self.assertEqual(response.status_code, 200)
