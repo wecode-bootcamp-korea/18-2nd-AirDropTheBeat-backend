@@ -12,7 +12,7 @@ class SignUpView(View):
     def post(self, request):
         try:
             data = json.loads(request.body)
-
+            
             first_name    = data['first_name']
             last_name     = data['last_name']
             date_of_birth = data['date_of_birth']
@@ -34,7 +34,6 @@ class SignUpView(View):
                 return JsonResponse({'message':'EMAIL ALREADY EXISTS'}, status=400)
 
             hashed_password = bcrypt.hashpw(password.encode('UTF-8'), bcrypt.gensalt()).decode()
-
             User.objects.create(
                 first_name    = first_name,
                 last_name     = last_name,
@@ -42,7 +41,8 @@ class SignUpView(View):
                 email         = email,
                 password      = hashed_password,
                 phone_number  = phone_number
-            )   
+            )
+
             return JsonResponse({'message':'SUCCESS'}, status = 201)
         except KeyError:
             return JsonResponse({'message':'KEY ERROR'}, status=400)
