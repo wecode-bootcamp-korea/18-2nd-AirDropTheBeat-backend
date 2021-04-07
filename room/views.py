@@ -1,9 +1,13 @@
-from django.views     import View
-from django.http      import JsonResponse
-from django.db.models import Avg
+from datetime import datetime
 
-from room.models import Room, Image, RoomConvenience, RoomRule, Review
+from django.views                 import View
+from django.http                  import JsonResponse
+from django.db.models             import Avg
+from django.db.models.query_utils import Q
+
+from room.models import Room, District, Image, RoomConvenience, RoomRule, Review
 from user.models import User, Host
+from book.models import Book, BookStatus
 
 class RoomDetailView(View):
     def get(self, request, room_id):
@@ -95,3 +99,77 @@ class ReviewView(View):
             result = {}
 
         return JsonResponse(result, status=200)
+
+
+class RoomListView(View):
+    def get(self, request):
+        try:
+            city_id      = request.GET.get('city_id', None)
+            district     = request.GET.get('district', None)
+            str_checkin  = request.GET.get('checkin', None) 
+            str_checkout = request.GET.get('checkout', None)
+            checkin      = datetime.strptime(str_checkin, "%Y-%m-%d")
+            checkout     = datetime.strptime(str_checkout, "%Y-%m-%d")
+            adults       = request.GET.get('adults', 0)
+            child        = request.GET.get('child', 0)
+            baby         = request.GET.get('baby', 0)
+            guest        = int(adults) + int(child) + int(baby)
+
+            exist_district = District.objects.filter(name=district).exists()
+            if not exist_district:
+                return JsonResponse({'message': 'DISTRICT_DOES_NOT_EXIST'}, status=400)
+           
+            page   = int(request.GET.get('page', 1))
+            item   = 20
+            offset = (page-1) * item
+            limit  = offset + item
+            
+            district       = District.objects.get(name=district)
+            BOOKED         = BookStatus.objects.get(name="예약완료")
+            booked_room_id = [booked.room.id for booked in Book.objects.filter(
+                                                                            (Q(start_date__gte = checkin) & Q(start_date__lt = checkout))|
+                                                                            (Q(end_date__gt    = checkin) & Q(end_date__lte  = checkout)),
+                                                                            book_status = BOOKED
+                                                                            ).select_related('room')]
+            
+            rooms = Room.objects.filter(city_id             = city_id, 
+                                        district            = district, 
+                                        maximum_people__gte = guest).exclude(id__in = booked_room_id).select_related('type','city','district').prefetch_related('room_conveniences','image_set')
+
+            room_list = [{
+                     "room_id"           : room.id,
+                     "title"             : room.title,
+                     "type_id"           : room.type_id,
+                     "type_name"         : room.type.name,
+                     "city_name"         : room.city.name,
+                     "district_name"     : room.district.name,
+                     "price"             : room.price,
+                     "discount_rate"     : room.discount_rate,
+                     "latitude"          : float(room.latitude),
+                     "longitude"         : float(room.longitude),
+                     "room_info"         : "최대인원 {0}명•침실{1}개•침대 {2}개•욕실 {3}개".format(room.maximum_people, room.bedroom, room.bed, room.bathroom),
+                     "room_conveniences" : [convenience.name+" " for convenience in room.room_conveniences.all()],
+                     "avg_review"        : review_average(room),
+                     "count_review"      : room.reviews.count(),
+                     "images"            : [images.image_url for images in room.image_set.all()], 
+                 } for room in rooms[offset:limit]]
+
+            return JsonResponse({'room_list':room_list}, status=200)
+        
+        except TypeError:
+            return JsonResponse({'message': 'TYPE_ERROR'}, status=400)
+
+
+def review_average(room):
+    if room.review_set.exists():
+        room.select_related('review_set')
+        sum_rating = room.review_set.aggregate(cleanliness=Avg('cleanliness'))['cleanliness'] +\
+                     room.review_set.aggregate(accuracy=Avg('accuracy'))['accuracy'] +\
+                     room.review_set.aggregate(communication=Avg('communication'))['communication'] +\
+                     room.review_set.aggregate(location=Avg('location'))['location'] +\
+                     room.review_set.aggregate(checkin=Avg('checkin'))['checkin'] +\
+                     room.review_set.aggregate(satisfaction=Avg('satisfaction'))['satisfaction']
+        rating     = round(sum_rating/6,2)
+        return rating
+    else:
+        return 0 
