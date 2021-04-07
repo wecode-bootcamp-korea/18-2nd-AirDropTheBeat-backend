@@ -6,8 +6,10 @@ from django.db.models             import Avg
 from django.db.models.query_utils import Q
 
 from room.models import Room, District, Image, RoomConvenience, RoomRule, Review
+from room.utils  import review_average
 from user.models import User, Host
 from book.models import Book, BookStatus
+
 
 class RoomDetailView(View):
     def get(self, request, room_id):
@@ -108,33 +110,61 @@ class RoomListView(View):
             district     = request.GET.get('district', None)
             str_checkin  = request.GET.get('checkin', None) 
             str_checkout = request.GET.get('checkout', None)
-            checkin      = datetime.strptime(str_checkin, "%Y-%m-%d")
-            checkout     = datetime.strptime(str_checkout, "%Y-%m-%d")
             adults       = request.GET.get('adults', 0)
             child        = request.GET.get('child', 0)
             baby         = request.GET.get('baby', 0)
-            guest        = int(adults) + int(child) + int(baby)
-
-            exist_district = District.objects.filter(name=district).exists()
-            if not exist_district:
-                return JsonResponse({'message': 'DISTRICT_DOES_NOT_EXIST'}, status=400)
-           
-            page   = int(request.GET.get('page', 1))
+            min          = request.GET.get('min', 0)
+            max          = request.GET.get('max', 100000000)
+            type         = request.GET.getlist('typelist', None)
+            page         = int(request.GET.get('page', 1))
+            
             item   = 20
             offset = (page-1) * item
             limit  = offset + item
+
+            guest        = int(adults) + int(child) + int(baby)
+            checkin      = datetime.strptime(str_checkin, "%Y-%m-%d")
+            checkout     = datetime.strptime(str_checkout, "%Y-%m-%d")
             
-            district       = District.objects.get(name=district)
+            exist_district = District.objects.filter(name=district).exists()
+            if not exist_district:
+                return JsonResponse({'message': 'DISTRICT_DOES_NOT_EXIST'}, status=400)
+
+            district = District.objects.get(name=district)
+
+            sort_params = {}
+            
+            if city_id:
+                sort_params['city_id'] = city_id
+            
+            if district:
+                sort_params['district'] = district
+
+            if guest:
+                sort_params['maximum_people__gte'] = guest
+
+            if type:
+                sort_params['type_id__in'] = type
+
+            if min:
+                sort_params['price__gte'] = min
+
+            if max:
+                sort_params['price__lte'] = max
+
+            
             BOOKED         = BookStatus.objects.get(name="예약완료")
-            booked_room_id = [booked.room.id for booked in Book.objects.filter(
-                                                                            (Q(start_date__gte = checkin) & Q(start_date__lt = checkout))|
-                                                                            (Q(end_date__gt    = checkin) & Q(end_date__lte  = checkout)),
-                                                                            book_status = BOOKED
-                                                                            ).select_related('room')]
+            booked_room_id = [booked.room.id for booked in Book.objects.\
+                                                                    filter(
+                                                                           (Q(start_date__gte = checkin) & Q(start_date__lt = checkout))|
+                                                                           (Q(end_date__gt    = checkin) & Q(end_date__lte  = checkout)),
+                                                                           book_status = BOOKED
+                                                                           ).select_related('room')]
             
-            rooms = Room.objects.filter(city_id             = city_id, 
-                                        district            = district, 
-                                        maximum_people__gte = guest).exclude(id__in = booked_room_id).select_related('type','city','district').prefetch_related('room_conveniences','image_set')
+            rooms = Room.objects.filter(**sort_params).\
+                                    exclude(id__in = booked_room_id).\
+                                        select_related('type','city','district').\
+                                        prefetch_related('room_conveniences','image_set')
 
             room_list = [{
                      "room_id"           : room.id,
@@ -158,18 +188,3 @@ class RoomListView(View):
         
         except TypeError:
             return JsonResponse({'message': 'TYPE_ERROR'}, status=400)
-
-
-def review_average(room):
-    if room.review_set.exists():
-        room.select_related('review_set')
-        sum_rating = room.review_set.aggregate(cleanliness=Avg('cleanliness'))['cleanliness'] +\
-                     room.review_set.aggregate(accuracy=Avg('accuracy'))['accuracy'] +\
-                     room.review_set.aggregate(communication=Avg('communication'))['communication'] +\
-                     room.review_set.aggregate(location=Avg('location'))['location'] +\
-                     room.review_set.aggregate(checkin=Avg('checkin'))['checkin'] +\
-                     room.review_set.aggregate(satisfaction=Avg('satisfaction'))['satisfaction']
-        rating     = round(sum_rating/6,2)
-        return rating
-    else:
-        return 0 
